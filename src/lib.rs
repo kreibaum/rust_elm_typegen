@@ -1,10 +1,14 @@
-use syn::spanned::Spanned;
+use std::collections::HashMap;
+
+use syn::{ext::IdentExt, spanned::Spanned};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum TypeGenError {
     #[error("{0}")]
     Syn(#[from] syn::Error),
+    #[error("Unnamed structs are not supported")]
+    UnnamedStructsNotSupported,
 }
 
 pub type Result<T> = std::result::Result<T, TypeGenError>;
@@ -18,6 +22,7 @@ pub trait ElmExport {}
 // Dict(Box<ElmType>, Box<ElmType>),
 // Maybe(Box<ElmType>),
 // Result(Box<ElmType>, Box<ElmType>),
+#[derive(Debug)]
 pub enum ElmType {
     Int,
     String,
@@ -51,12 +56,23 @@ impl ElmType {
             ElmType::List(t) => format!("Json.Encode.list ({})", t.encoder_ref()),
         }
     }
+
+    fn from_identifier(identifier: Identifier) -> Self {
+        if identifier.0 == "u32" {
+            ElmType::Int
+        } else if identifier.0 == "String" {
+            ElmType::String
+        } else {
+            todo!("identifier not implemented yet.")
+        }
+    }
 }
 
 // TODO: Handle snake_case -> camelCase conversion
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identifier(String);
 
+#[derive(Debug)]
 pub struct ElmStruct {
     name: Identifier,
     fields: Vec<(Identifier, ElmType)>,
@@ -168,15 +184,22 @@ impl ElmStruct {
     }
 }
 
+#[derive(Debug)]
 pub struct RustFile {
     pub main_export_types: Vec<Identifier>,
+    pub all_structs: Vec<ElmStruct>,
 }
 
 impl RustFile {
     pub fn parse(ast: &syn::File) -> Result<RustFile> {
         let main_export_types = discover_export_types(ast)?;
 
-        Ok(RustFile { main_export_types })
+        let all_structs = find_all_structs(ast)?;
+
+        Ok(RustFile {
+            main_export_types,
+            all_structs,
+        })
     }
 }
 
@@ -197,6 +220,55 @@ fn discover_export_types(ast: &syn::File) -> Result<Vec<Identifier>> {
         }
     }
     Ok(main_export_types)
+}
+
+fn find_all_structs(ast: &syn::File) -> Result<Vec<ElmStruct>> {
+    let mut result = vec![];
+
+    for item in &ast.items {
+        if let syn::Item::Struct(item_struct) = item {
+            let identifier = Identifier(item_struct.ident.to_string());
+            match &item_struct.fields {
+                syn::Fields::Named(fields) => {
+                    result.push(extract_elm_struct(identifier, fields)?);
+                }
+                syn::Fields::Unnamed(_) => return Err(TypeGenError::UnnamedStructsNotSupported),
+                syn::Fields::Unit => return Err(TypeGenError::UnnamedStructsNotSupported),
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+fn extract_elm_struct(identifier: Identifier, fields: &syn::FieldsNamed) -> Result<ElmStruct> {
+    let mut result = ElmStruct {
+        name: identifier,
+        fields: vec![],
+    };
+    for field in &fields.named {
+        let ident = Identifier(field.ident.as_ref().unwrap().to_string());
+        let ty = match &field.ty {
+            syn::Type::Array(_) => todo!("Array missing"),
+            syn::Type::BareFn(_) => todo!("BareFn missing"),
+            syn::Type::Group(_) => todo!("Group missing"),
+            syn::Type::ImplTrait(_) => todo!("ImplTrait missing"),
+            syn::Type::Infer(_) => todo!("Infer missing"),
+            syn::Type::Macro(_) => todo!("Macro missing"),
+            syn::Type::Never(_) => todo!("Never missing"),
+            syn::Type::Paren(_) => todo!("Paren missing"),
+            syn::Type::Path(type_path) => ElmType::from_identifier(simple_path(&type_path.path)?),
+            syn::Type::Ptr(_) => todo!("Ptr missing"),
+            syn::Type::Reference(_) => todo!("Reference missing"),
+            syn::Type::Slice(_) => todo!("Slice missing"),
+            syn::Type::TraitObject(_) => todo!("TraitObject missing"),
+            syn::Type::Tuple(_) => todo!("Tuple missing"),
+            syn::Type::Verbatim(_) => todo!("Verbatim missing"),
+            syn::Type::__TestExhaustive(_) => todo!("__TestExhaustive missing"),
+        };
+        result.fields.push((ident, ty));
+    }
+    Ok(result)
 }
 
 fn simple_path(path: &syn::Path) -> Result<Identifier> {
@@ -309,6 +381,8 @@ mod tests {
             rust_file.main_export_types[0],
             Identifier("Person".to_string())
         );
+        println!("{:#?}", rust_file);
+        // panic!();
         Ok(())
     }
 }
