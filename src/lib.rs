@@ -14,6 +14,7 @@ pub enum ElmType {
 }
 
 impl ElmType {
+    #[must_use]
     pub fn type_ref(&self) -> String {
         match self {
             ElmType::Int => "Int".to_string(),
@@ -22,6 +23,7 @@ impl ElmType {
         }
     }
 
+    #[must_use]
     pub fn decoder_ref(&self) -> String {
         match self {
             ElmType::Int => "Json.Decode.int".to_string(),
@@ -30,6 +32,7 @@ impl ElmType {
         }
     }
 
+    #[must_use]
     pub fn encoder_ref(&self) -> String {
         match self {
             ElmType::Int => "Json.Encode.int".to_string(),
@@ -49,10 +52,12 @@ pub struct ElmStruct {
 }
 
 impl ElmStruct {
+    #[must_use]
     pub fn type_ref(&self) -> String {
         self.name.0.clone()
     }
 
+    #[must_use]
     pub fn type_def(&self) -> String {
         // Outputs something like:
         // type alias Person =
@@ -74,11 +79,13 @@ impl ElmStruct {
         output
     }
 
+    #[must_use]
     pub fn decoder_ref(&self) -> String {
         // Outputs something like decodePerson
         format!("decode{}", self.name.0)
     }
 
+    #[must_use]
     pub fn decoder_def(&self) -> String {
         // Outputs something like:
         // decodePerson : Json.Decode.Decoder Person
@@ -105,10 +112,12 @@ impl ElmStruct {
         output
     }
 
+    #[must_use]
     pub fn encoder_ref(&self) -> String {
         format!("encode{}", self.name.0)
     }
 
+    #[must_use]
     pub fn encoder_def(&self) -> String {
         // Outputs something like:
         // encodePerson : Person -> Json.Encode.Value
