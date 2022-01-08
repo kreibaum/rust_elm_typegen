@@ -15,4 +15,5 @@ path = "src/bin/typegen.rs"
 
 [dependencies]
 indoc = "1"
-syn = {version="1", default-features=false, features=["full", "parsing"]}
+syn = {version="1", default-features=false, features=["full", "parsing", "printing", "extra-traits"]}
+thiserror = "1"

@@ -1,3 +1,14 @@
+use syn::spanned::Spanned;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum TypeGenError {
+    #[error("{0}")]
+    Syn(#[from] syn::Error),
+}
+
+pub type Result<T> = std::result::Result<T, TypeGenError>;
+
 /// Marker trait for exported types.
 pub trait ElmExport {}
 
@@ -43,8 +54,8 @@ impl ElmType {
 }
 
 // TODO: Handle snake_case -> camelCase conversion
-#[derive(Debug, Clone)]
-struct Identifier(String);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identifier(String);
 
 pub struct ElmStruct {
     name: Identifier,
@@ -157,6 +168,53 @@ impl ElmStruct {
     }
 }
 
+pub struct RustFile {
+    pub main_export_types: Vec<Identifier>,
+}
+
+impl RustFile {
+    pub fn parse(ast: &syn::File) -> Result<RustFile> {
+        let main_export_types = discover_export_types(ast)?;
+
+        Ok(RustFile { main_export_types })
+    }
+}
+
+fn discover_export_types(ast: &syn::File) -> Result<Vec<Identifier>> {
+    let mut main_export_types = Vec::new();
+    for item in &ast.items {
+        if let syn::Item::Impl(item_impl) = item {
+            if let Some((_, item_impl_trait, _)) = &item_impl.trait_ {
+                let trait_ident = last_path(item_impl_trait)?;
+
+                if trait_ident.0 == "ElmExport" {
+                    if let syn::Type::Path(type_path) = item_impl.self_ty.as_ref() {
+                        let type_for_export = simple_path(&type_path.path)?;
+                        main_export_types.push(type_for_export);
+                    }
+                }
+            }
+        }
+    }
+    Ok(main_export_types)
+}
+
+fn simple_path(path: &syn::Path) -> Result<Identifier> {
+    if path.segments.len() != 1 {
+        return Err(syn::Error::new(path.span(), "Only simple paths are supported").into());
+    }
+    Ok(Identifier(path.segments.first().unwrap().ident.to_string()))
+}
+
+fn last_path(path: &syn::Path) -> Result<Identifier> {
+    let last = path.segments.last();
+    if let Some(last) = last {
+        Ok(Identifier(last.ident.to_string()))
+    } else {
+        Err(syn::Error::new(path.span(), "There is nothing in the path.").into())
+    }
+}
+
 // Test module
 #[cfg(test)]
 mod tests {
@@ -237,13 +295,20 @@ mod tests {
 
     #[test]
     /// Test for the person.rs file
-    fn test_person_file() {
+    fn test_person_file() -> Result<()> {
         let mut file = File::open("src/tests/person.rs").expect("Failed to open file");
         let mut content = String::new();
         file.read_to_string(&mut content)
             .expect("Failed to read file");
 
         let ast = syn::parse_file(&content).expect("Failed to parse file");
-        assert_eq!(4, ast.items.len());
+
+        let rust_file = RustFile::parse(&ast)?;
+        assert_eq!(1, rust_file.main_export_types.len());
+        assert_eq!(
+            rust_file.main_export_types[0],
+            Identifier("Person".to_string())
+        );
+        Ok(())
     }
 }
