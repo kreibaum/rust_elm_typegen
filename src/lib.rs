@@ -1,3 +1,6 @@
+/// Marker trait for exported types.
+pub trait ElmExport {}
+
 // Float,
 // Char,
 // Bool,
@@ -148,9 +151,13 @@ impl ElmStruct {
 // Test module
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
-
     use super::*;
+
+    use indoc::indoc;
+    use std::fs::File;
+    use std::io::Read;
+
+    mod person;
 
     #[test]
     fn basic_export() {
@@ -217,5 +224,17 @@ mod tests {
                 "
             }
         );
+    }
+
+    #[test]
+    /// Test for the person.rs file
+    fn test_person_file() {
+        let mut file = File::open("src/tests/person.rs").expect("Failed to open file");
+        let mut content = String::new();
+        file.read_to_string(&mut content)
+            .expect("Failed to read file");
+
+        let ast = syn::parse_file(&content).expect("Failed to parse file");
+        assert_eq!(4, ast.items.len());
     }
 }
