@@ -4,14 +4,14 @@
 // Dict(Box<ElmType>, Box<ElmType>),
 // Maybe(Box<ElmType>),
 // Result(Box<ElmType>, Box<ElmType>),
-enum ElmType {
+pub enum ElmType {
     Int,
     String,
     List(Box<ElmType>),
 }
 
 impl ElmType {
-    fn type_ref(&self) -> String {
+    pub fn type_ref(&self) -> String {
         match self {
             ElmType::Int => "Int".to_string(),
             ElmType::String => "String".to_string(),
@@ -19,7 +19,7 @@ impl ElmType {
         }
     }
 
-    fn decoder_ref(&self) -> String {
+    pub fn decoder_ref(&self) -> String {
         match self {
             ElmType::Int => "Json.Decode.int".to_string(),
             ElmType::String => "Json.Decode.string".to_string(),
@@ -27,7 +27,7 @@ impl ElmType {
         }
     }
 
-    fn encoder_ref(&self) -> String {
+    pub fn encoder_ref(&self) -> String {
         match self {
             ElmType::Int => "Json.Encode.int".to_string(),
             ElmType::String => "Json.Encode.string".to_string(),
@@ -40,17 +40,17 @@ impl ElmType {
 #[derive(Debug, Clone)]
 struct Identifier(String);
 
-struct ElmStruct {
+pub struct ElmStruct {
     name: Identifier,
     fields: Vec<(Identifier, ElmType)>,
 }
 
 impl ElmStruct {
-    fn type_ref(&self) -> String {
+    pub fn type_ref(&self) -> String {
         self.name.0.clone()
     }
 
-    fn type_def(&self) -> String {
+    pub fn type_def(&self) -> String {
         // Outputs something like:
         // type alias Person =
         //     { age : Int
@@ -71,12 +71,12 @@ impl ElmStruct {
         output
     }
 
-    fn decoder_ref(&self) -> String {
+    pub fn decoder_ref(&self) -> String {
         // Outputs something like decodePerson
         format!("decode{}", self.name.0)
     }
 
-    fn decoder_def(&self) -> String {
+    pub fn decoder_def(&self) -> String {
         // Outputs something like:
         // decodePerson : Json.Decode.Decoder Person
         // decodePerson =
@@ -102,11 +102,11 @@ impl ElmStruct {
         output
     }
 
-    fn encoder_ref(&self) -> String {
+    pub fn encoder_ref(&self) -> String {
         format!("encode{}", self.name.0)
     }
 
-    fn encoder_def(&self) -> String {
+    pub fn encoder_def(&self) -> String {
         // Outputs something like:
         // encodePerson : Person -> Json.Encode.Value
         // encodePerson person =
@@ -143,22 +143,6 @@ impl ElmStruct {
         output.push_str("        ]\n");
         output
     }
-}
-
-fn main() {
-    let ty = ElmStruct {
-        name: Identifier("Person".to_string()),
-        fields: vec![
-            (Identifier("age".to_string()), ElmType::Int),
-            (Identifier("surname".to_string()), ElmType::String),
-        ],
-    };
-    println!("{}", ty.type_ref());
-    println!("{}", ty.type_def());
-    println!("{}", ty.decoder_ref());
-    println!("{}", ty.decoder_def());
-    println!("{}", ty.encoder_ref());
-    println!("{}", ty.encoder_def());
 }
 
 // Test module

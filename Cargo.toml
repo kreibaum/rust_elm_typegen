@@ -3,7 +3,16 @@ name = "rust_elm_typegen"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "rust_elm_typegen"
+path = "src/bin/typegen.rs"
+
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 indoc = "1"
+syn = "1"
