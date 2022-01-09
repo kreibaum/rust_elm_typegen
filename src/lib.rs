@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use syn::{ext::IdentExt, spanned::Spanned};
+use syn::spanned::Spanned;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
