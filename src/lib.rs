@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use syn::spanned::Spanned;
 use thiserror::Error;
 
@@ -20,7 +22,7 @@ pub trait ElmExport {}
 // Dict(Box<ElmType>, Box<ElmType>),
 // Maybe(Box<ElmType>),
 // Result(Box<ElmType>, Box<ElmType>),
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ElmType {
     Int,
     String,
@@ -67,10 +69,10 @@ impl ElmType {
 }
 
 // TODO: Handle snake_case -> camelCase conversion
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier(String);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ElmStruct {
     name: Identifier,
     fields: Vec<(Identifier, ElmType)>,
@@ -184,8 +186,15 @@ impl ElmStruct {
 
 #[derive(Debug)]
 pub struct RustFile {
+    /// Indicates which types are requested for the export. Any types that are
+    /// referenced by this will also be included in the output but are not
+    /// the main export types.
     pub main_export_types: Vec<Identifier>,
-    pub all_structs: Vec<ElmStruct>,
+    /// All structs we have seen in the file. Maybe not all of them need to be
+    /// turned into elm structs.
+    pub all_structs: HashMap<Identifier, ElmStruct>,
+    /// All structs that are exported into the target elm file
+    pub export_structs: Vec<ElmStruct>,
 }
 
 impl RustFile {
@@ -194,9 +203,22 @@ impl RustFile {
 
         let all_structs = find_all_structs(ast)?;
 
+        let mut export_structs: Vec<ElmStruct> = vec![];
+        for identifier in &main_export_types {
+            if let Some(struct_) = all_structs.get(identifier) {
+                export_structs.push(struct_.clone());
+            } else {
+                panic!(
+                    "Could not find struct {:?} which is requested for export.",
+                    identifier
+                );
+            }
+        }
+
         Ok(RustFile {
             main_export_types,
             all_structs,
+            export_structs,
         })
     }
 }
@@ -220,15 +242,15 @@ fn discover_export_types(ast: &syn::File) -> Result<Vec<Identifier>> {
     Ok(main_export_types)
 }
 
-fn find_all_structs(ast: &syn::File) -> Result<Vec<ElmStruct>> {
-    let mut result = vec![];
+fn find_all_structs(ast: &syn::File) -> Result<HashMap<Identifier, ElmStruct>> {
+    let mut result = HashMap::new();
 
     for item in &ast.items {
         if let syn::Item::Struct(item_struct) = item {
             let identifier = Identifier(item_struct.ident.to_string());
             match &item_struct.fields {
                 syn::Fields::Named(fields) => {
-                    result.push(extract_elm_struct(identifier, fields)?);
+                    result.insert(identifier.clone(), extract_elm_struct(identifier, fields)?);
                 }
                 syn::Fields::Unnamed(_) => return Err(TypeGenError::UnnamedStructsNotSupported),
                 syn::Fields::Unit => return Err(TypeGenError::UnnamedStructsNotSupported),
@@ -380,7 +402,18 @@ mod tests {
             Identifier("Person".to_string())
         );
         println!("{:#?}", rust_file);
-        // panic!();
+        assert_eq!(rust_file.export_structs.len(), 1);
+        assert_eq!(
+            rust_file.export_structs.get(0).unwrap().type_def(),
+            indoc! {"
+            type alias Person =
+                { age : Int
+                , surname : String
+                }
+            "
+            }
+        );
+
         Ok(())
     }
 }
