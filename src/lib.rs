@@ -204,6 +204,46 @@ impl ElmStruct {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ElmEnum {
+    name: Identifier,
+    variants: Vec<ElmEnumVariant>,
+}
+
+#[derive(Debug, Clone)]
+struct ElmEnumVariant {
+    name: Identifier,
+    fields: Vec<ElmType>,
+}
+
+impl ElmEnum {
+    pub fn type_def(&self) -> String {
+        // Outputs something like:
+        // type Message
+        //     = PrimaryVariant
+        //     | SecondaryVariant Int String
+        //     | ThirdVariant
+
+        let mut output = format!("type {}\n", self.name.0);
+        let mut is_first = true;
+        for variant in &self.variants {
+            if is_first {
+                output.push_str("    = ");
+                is_first = false;
+            } else {
+                output.push_str("    | ");
+            }
+            output.push_str(&variant.name.0);
+            for field in &variant.fields {
+                output.push(' ');
+                output.push_str(&field.type_ref());
+            }
+            output.push('\n');
+        }
+        output
+    }
+}
+
 #[derive(Debug)]
 pub struct RustFile {
     /// Indicates which types are requested for the export. Any types that are
@@ -215,11 +255,16 @@ pub struct RustFile {
     pub all_structs: HashMap<Identifier, ElmStruct>,
     /// All structs that are exported into the target elm file
     pub export_structs: Vec<ElmStruct>,
+    /// All enums we have seen in the file.
+    pub all_enums: HashMap<Identifier, ElmEnum>,
+    /// All enums that are exported into the target elm file
+    pub export_enums: Vec<ElmEnum>,
 }
 
 impl RustFile {
     pub fn parse(ast: &syn::File) -> Result<RustFile> {
         let main_export_types = discover_export_types(ast)?;
+        let mut main_export_enums = Vec::new();
 
         let all_structs = find_all_structs(ast)?;
 
@@ -228,10 +273,18 @@ impl RustFile {
             if let Some(struct_) = all_structs.get(identifier) {
                 export_structs.push(struct_.clone());
             } else {
-                panic!(
-                    "Could not find struct {:?} which is requested for export.",
-                    identifier
-                );
+                main_export_enums.push(identifier.clone());
+            }
+        }
+
+        let all_enums = find_all_enums(ast)?;
+
+        let mut export_enums: Vec<ElmEnum> = vec![];
+        for identifier in &main_export_enums {
+            if let Some(enum_) = all_enums.get(identifier) {
+                export_enums.push(enum_.clone());
+            } else {
+                panic!("Enum/Struct {:?} not found", identifier);
             }
         }
 
@@ -239,8 +292,42 @@ impl RustFile {
             main_export_types,
             all_structs,
             export_structs,
+            all_enums,
+            export_enums,
         })
     }
+}
+
+fn find_all_enums(ast: &syn::File) -> Result<HashMap<Identifier, ElmEnum>> {
+    let mut result = HashMap::new();
+
+    for item in &ast.items {
+        if let syn::Item::Enum(item_enum) = item {
+            let identifier = Identifier(item_enum.ident.to_string());
+            let mut variants = vec![];
+            for variant in &item_enum.variants {
+                let var_ident = Identifier(variant.ident.to_string());
+                let mut fields = vec![];
+                for field in variant.fields.iter() {
+                    let ty = elm_type_from_type(&field.ty)?;
+                    fields.push(ty);
+                }
+                variants.push(ElmEnumVariant {
+                    name: var_ident,
+                    fields,
+                });
+            }
+            result.insert(
+                identifier.clone(),
+                ElmEnum {
+                    name: identifier,
+                    variants,
+                },
+            );
+        }
+    }
+
+    Ok(result)
 }
 
 fn discover_export_types(ast: &syn::File) -> Result<Vec<Identifier>> {
@@ -288,27 +375,32 @@ fn extract_elm_struct(identifier: Identifier, fields: &syn::FieldsNamed) -> Resu
     };
     for field in &fields.named {
         let ident = Identifier(field.ident.as_ref().unwrap().to_string());
-        let ty = match &field.ty {
-            syn::Type::Array(_) => todo!("Array missing"),
-            syn::Type::BareFn(_) => todo!("BareFn missing"),
-            syn::Type::Group(_) => todo!("Group missing"),
-            syn::Type::ImplTrait(_) => todo!("ImplTrait missing"),
-            syn::Type::Infer(_) => todo!("Infer missing"),
-            syn::Type::Macro(_) => todo!("Macro missing"),
-            syn::Type::Never(_) => todo!("Never missing"),
-            syn::Type::Paren(_) => todo!("Paren missing"),
-            syn::Type::Path(type_path) => ElmType::from_identifier(simple_path(&type_path.path)?),
-            syn::Type::Ptr(_) => todo!("Ptr missing"),
-            syn::Type::Reference(_) => todo!("Reference missing"),
-            syn::Type::Slice(_) => todo!("Slice missing"),
-            syn::Type::TraitObject(_) => todo!("TraitObject missing"),
-            syn::Type::Tuple(_) => todo!("Tuple missing"),
-            syn::Type::Verbatim(_) => todo!("Verbatim missing"),
-            syn::Type::__TestExhaustive(_) => todo!("__TestExhaustive missing"),
-        };
+        let ty = elm_type_from_type(&field.ty)?;
         result.fields.push((ident, ty));
     }
     Ok(result)
+}
+
+fn elm_type_from_type(ty: &syn::Type) -> Result<ElmType> {
+    let ty = match &ty {
+        syn::Type::Array(_) => todo!("Array missing"),
+        syn::Type::BareFn(_) => todo!("BareFn missing"),
+        syn::Type::Group(_) => todo!("Group missing"),
+        syn::Type::ImplTrait(_) => todo!("ImplTrait missing"),
+        syn::Type::Infer(_) => todo!("Infer missing"),
+        syn::Type::Macro(_) => todo!("Macro missing"),
+        syn::Type::Never(_) => todo!("Never missing"),
+        syn::Type::Paren(_) => todo!("Paren missing"),
+        syn::Type::Path(type_path) => ElmType::from_identifier(simple_path(&type_path.path)?),
+        syn::Type::Ptr(_) => todo!("Ptr missing"),
+        syn::Type::Reference(_) => todo!("Reference missing"),
+        syn::Type::Slice(_) => todo!("Slice missing"),
+        syn::Type::TraitObject(_) => todo!("TraitObject missing"),
+        syn::Type::Tuple(_) => todo!("Tuple missing"),
+        syn::Type::Verbatim(_) => todo!("Verbatim missing"),
+        syn::Type::__TestExhaustive(_) => todo!("__TestExhaustive missing"),
+    };
+    Ok(ty)
 }
 
 fn simple_path(path: &syn::Path) -> Result<Identifier> {
@@ -336,6 +428,7 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
 
+    mod message;
     mod person;
 
     #[test]
@@ -449,5 +542,31 @@ mod tests {
         assert_eq!(elm_file_object.generate_file_content(), elm_file_content);
 
         Ok(())
+    }
+
+    /// Test for enum parsing
+    #[test]
+    fn test_message_file() {
+        let mut rust_file = File::open("src/tests/message.rs").expect("Failed to open file");
+        let mut rust_file_content = String::new();
+        rust_file
+            .read_to_string(&mut rust_file_content)
+            .expect("Failed to read file");
+
+        let ast = syn::parse_file(&rust_file_content).expect("Failed to parse file");
+
+        let rust_file = RustFile::parse(&ast).expect("Failed to parse file");
+
+        assert_eq!(rust_file.export_enums.len(), 1);
+        assert_eq!(
+            rust_file.export_enums[0].type_def(),
+            indoc! {"
+            type RemoteMessage
+                = Hello String
+                | Compare Int Int
+                | Goodbye
+            "
+            }
+        );
     }
 }
