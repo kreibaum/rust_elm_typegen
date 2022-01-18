@@ -1,6 +1,10 @@
 module Person exposing (..)
 
 
+import Json.Decode
+import Json.Encode
+import Json.Decode.Pipeline
+
 type alias Person =
     { age : Int
     , surname : String

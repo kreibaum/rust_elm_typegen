@@ -75,18 +75,29 @@ pub struct Identifier(String);
 pub struct ElmFile {
     name: String,
     structs: Vec<ElmStruct>,
+    enums: Vec<ElmEnum>,
 }
 
 impl ElmFile {
     pub fn generate_file_content(&self) -> String {
         let mut result = String::new();
         result.push_str(&format!("module {} exposing (..)\n\n\n", self.name));
+        result.push_str("import Json.Decode\n");
+        result.push_str("import Json.Encode\n");
+        result.push_str("import Json.Decode.Pipeline\n\n");
         for struct_ in &self.structs {
             result.push_str(&struct_.type_def());
             result.push('\n');
             result.push_str(&struct_.encoder_def());
             result.push('\n');
             result.push_str(&struct_.decoder_def());
+        }
+        for enum_ in &self.enums {
+            result.push_str(&enum_.type_def());
+            result.push('\n');
+            result.push_str(&enum_.encoder_def());
+            result.push('\n');
+            result.push_str(&enum_.decoder_def());
         }
         result
     }
@@ -240,6 +251,83 @@ impl ElmEnum {
             }
             output.push('\n');
         }
+        output
+    }
+
+    fn encoder_def(&self) -> String {
+        "".to_string()
+    }
+
+    fn decoder_def(&self) -> String {
+        let mut output = format!(
+            "decode{} : Json.Decode.Decoder {}\n",
+            self.name.0, self.name.0
+        );
+
+        // General decoder that collects all variant decoders
+        output.push_str(&format!("decode{} =\n", self.name.0));
+        output.push_str("    Json.Decode.oneOf\n");
+        let mut is_first = true;
+        for variant in &self.variants {
+            if is_first {
+                output.push_str("        [ ");
+                is_first = false;
+            } else {
+                output.push_str("        , ");
+            }
+            output.push_str(&format!("decode{}{}\n", self.name.0, variant.name.0));
+        }
+        output.push_str("        ]\n");
+
+        // Variant decoders
+        for variant in &self.variants {
+            output.push_str("\n\n");
+            output.push_str(&format!(
+                "decode{}{} : Json.Decode.Decoder {}\n",
+                self.name.0, variant.name.0, self.name.0
+            ));
+            output.push_str(&format!("decode{}{} =\n", self.name.0, variant.name.0));
+            if variant.fields.is_empty() {
+                // TODO: All those variants should be joined together for performance.
+                output.push_str("    Json.Decode.andThen\n");
+                output.push_str("        (\\str ->\n");
+                output.push_str("            case str of\n");
+                output.push_str(&format!("                \"{}\" ->\n", variant.name.0));
+                output.push_str(&format!(
+                    "                    Json.Decode.succeed {}\n\n",
+                    variant.name.0
+                ));
+                output.push_str("                _ ->\n");
+                output.push_str(&format!(
+                    "                    Json.Decode.fail \"Expected variant {}\"\n",
+                    variant.name.0
+                ));
+                output.push_str("        )\n");
+                output.push_str("        Json.Decode.string\n")
+            } else if variant.fields.len() == 1 {
+                output.push_str(&format!("    Json.Decode.succeed {}\n", variant.name.0));
+                let field = variant.fields.first().unwrap();
+                output.push_str(&format!(
+                    "        |> Json.Decode.Pipeline.required \"{}\" {}\n",
+                    variant.name.0,
+                    field.decoder_ref()
+                ));
+            } else {
+                output.push_str(&format!("    Json.Decode.succeed {}\n", variant.name.0));
+                for (i, ty) in variant.fields.iter().enumerate() {
+                    // |> Json.Decode.Pipeline.custom
+                    //     (Json.Decode.field "Compare" (Json.Decode.index 0 Json.Decode.int))
+                    output.push_str("        |> Json.Decode.Pipeline.custom \n");
+                    output.push_str(&format!(
+                        "            (Json.Decode.field \"{}\" (Json.Decode.index {} {}))\n",
+                        variant.name.0,
+                        i,
+                        ty.decoder_ref()
+                    ));
+                }
+            }
+        }
+
         output
     }
 }
@@ -537,6 +625,7 @@ mod tests {
         let elm_file_object = ElmFile {
             name: "Person".to_string(),
             structs: rust_file.export_structs,
+            enums: rust_file.export_enums,
         };
 
         assert_eq!(elm_file_object.generate_file_content(), elm_file_content);
@@ -564,9 +653,24 @@ mod tests {
             type RemoteMessage
                 = Hello String
                 | Compare Int Int
+                | Juggle Int String String
                 | Goodbye
             "
             }
         );
+
+        let mut elm_file = File::open("src/tests/Message.elm").expect("Failed to open file");
+        let mut elm_file_content = String::new();
+        elm_file
+            .read_to_string(&mut elm_file_content)
+            .expect("Failed to read file");
+
+        let elm_file_object = ElmFile {
+            name: "Message".to_string(),
+            structs: rust_file.export_structs,
+            enums: rust_file.export_enums,
+        };
+
+        assert_eq!(elm_file_object.generate_file_content(), elm_file_content);
     }
 }
