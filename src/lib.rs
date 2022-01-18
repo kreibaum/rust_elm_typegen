@@ -72,6 +72,26 @@ impl ElmType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier(String);
 
+pub struct ElmFile {
+    name: String,
+    structs: Vec<ElmStruct>,
+}
+
+impl ElmFile {
+    pub fn generate_file_content(&self) -> String {
+        let mut result = String::new();
+        result.push_str(&format!("module {} exposing (..)\n\n\n", self.name));
+        for struct_ in &self.structs {
+            result.push_str(&struct_.type_def());
+            result.push('\n');
+            result.push_str(&struct_.encoder_def());
+            result.push('\n');
+            result.push_str(&struct_.decoder_def());
+        }
+        result
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ElmStruct {
     name: Identifier,
@@ -388,12 +408,13 @@ mod tests {
     #[test]
     /// Test for the person.rs file
     fn test_person_file() -> Result<()> {
-        let mut file = File::open("src/tests/person.rs").expect("Failed to open file");
-        let mut content = String::new();
-        file.read_to_string(&mut content)
+        let mut rust_file = File::open("src/tests/person.rs").expect("Failed to open file");
+        let mut rust_file_content = String::new();
+        rust_file
+            .read_to_string(&mut rust_file_content)
             .expect("Failed to read file");
 
-        let ast = syn::parse_file(&content).expect("Failed to parse file");
+        let ast = syn::parse_file(&rust_file_content).expect("Failed to parse file");
 
         let rust_file = RustFile::parse(&ast)?;
         assert_eq!(1, rust_file.main_export_types.len());
@@ -401,7 +422,7 @@ mod tests {
             rust_file.main_export_types[0],
             Identifier("Person".to_string())
         );
-        println!("{:#?}", rust_file);
+
         assert_eq!(rust_file.export_structs.len(), 1);
         assert_eq!(
             rust_file.export_structs.get(0).unwrap().type_def(),
@@ -413,6 +434,19 @@ mod tests {
             "
             }
         );
+
+        let mut elm_file = File::open("src/tests/Person.elm").expect("Failed to open file");
+        let mut elm_file_content = String::new();
+        elm_file
+            .read_to_string(&mut elm_file_content)
+            .expect("Failed to read file");
+
+        let elm_file_object = ElmFile {
+            name: "Person".to_string(),
+            structs: rust_file.export_structs,
+        };
+
+        assert_eq!(elm_file_object.generate_file_content(), elm_file_content);
 
         Ok(())
     }
