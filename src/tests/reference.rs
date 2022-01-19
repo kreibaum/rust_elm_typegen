@@ -12,5 +12,12 @@ struct Coordinate {
     longitude: u64,
 }
 
+#[allow(dead_code)]
+enum MixedData {
+    GoodData(WeatherData),
+    BadData(Coordinate),
+}
+
 impl ElmExport for WeatherData {}
 impl ElmExport for Coordinate {}
+impl ElmExport for MixedData {}

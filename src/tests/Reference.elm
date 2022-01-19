@@ -43,3 +43,40 @@ decodeCoordinate =
     Json.Decode.succeed Coordinate
         |> Json.Decode.Pipeline.required "latitude" Json.Decode.int
         |> Json.Decode.Pipeline.required "longitude" Json.Decode.int
+
+type MixedData
+    = GoodData WeatherData
+    | BadData Coordinate
+
+encodeMixedData : MixedData -> Json.Encode.Value
+encodeMixedData mixeddata =
+    case mixeddata of
+        GoodData x ->
+            Json.Encode.object
+                [ ( "GoodData", encodeWeatherData x )
+                ]
+
+        BadData x ->
+            Json.Encode.object
+                [ ( "BadData", encodeCoordinate x )
+                ]
+
+
+decodeMixedData : Json.Decode.Decoder MixedData
+decodeMixedData =
+    Json.Decode.oneOf
+        [ decodeMixedDataGoodData
+        , decodeMixedDataBadData
+        ]
+
+
+decodeMixedDataGoodData : Json.Decode.Decoder MixedData
+decodeMixedDataGoodData =
+    Json.Decode.succeed GoodData
+        |> Json.Decode.Pipeline.required "GoodData" decodeWeatherData
+
+
+decodeMixedDataBadData : Json.Decode.Decoder MixedData
+decodeMixedDataBadData =
+    Json.Decode.succeed BadData
+        |> Json.Decode.Pipeline.required "BadData" decodeCoordinate
