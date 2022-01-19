@@ -265,7 +265,57 @@ impl ElmEnum {
     }
 
     fn encoder_def(&self) -> String {
-        "".to_string()
+        let mut output = format!(
+            "encode{} : {} -> Json.Encode.Value\n",
+            self.name.0, self.name.0
+        );
+        let this = self.name.0.to_lowercase();
+        output.push_str(&format!("encode{} {} =\n", self.name.0, this));
+        output.push_str(&format!("    case {} of\n", this));
+
+        for variant in &self.variants {
+            if variant.fields.is_empty() {
+                output.push_str(&format!("        {} ->\n", variant.name.0));
+                output.push_str(&format!(
+                    "            Json.Encode.string \"{}\"\n\n",
+                    variant.name.0
+                ));
+            } else if variant.fields.len() == 1 {
+                let field = variant.fields.first().unwrap();
+                output.push_str(&format!("        {} x ->\n", variant.name.0));
+                output.push_str("            Json.Encode.object\n");
+                output.push_str(&format!(
+                    "                [ ( \"{}\", {} x )\n",
+                    variant.name.0,
+                    field.encoder_ref()
+                ));
+                output.push_str("                ]\n\n");
+            } else {
+                output.push_str(&format!("        {} ", variant.name.0));
+                for (i, _) in variant.fields.iter().enumerate() {
+                    output.push_str(&format!("x{} ", i));
+                }
+                output.push_str("->\n");
+                output.push_str("            Json.Encode.object\n");
+                output.push_str(&format!("                [ ( \"{}\"\n", variant.name.0));
+                output.push_str("                  , Json.Encode.list (\\v -> v)\n");
+                let mut is_first = true;
+                for (i, field) in variant.fields.iter().enumerate() {
+                    if is_first {
+                        output.push_str("                        [ ");
+                        is_first = false;
+                    } else {
+                        output.push_str("                        , ");
+                    }
+                    output.push_str(&format!("{} x{}\n", field.encoder_ref(), i));
+                }
+                output.push_str("                        ]\n");
+                output.push_str("                  )\n");
+                output.push_str("                ]\n\n");
+            }
+        }
+
+        output
     }
 
     fn decoder_def(&self) -> String {

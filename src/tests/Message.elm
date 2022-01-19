@@ -11,6 +11,38 @@ type RemoteMessage
     | Juggle Int String String
     | Goodbye
 
+encodeRemoteMessage : RemoteMessage -> Json.Encode.Value
+encodeRemoteMessage remotemessage =
+    case remotemessage of
+        Hello x ->
+            Json.Encode.object
+                [ ( "Hello", Json.Encode.string x )
+                ]
+
+        Compare x0 x1 ->
+            Json.Encode.object
+                [ ( "Compare"
+                  , Json.Encode.list (\v -> v)
+                        [ Json.Encode.int x0
+                        , Json.Encode.int x1
+                        ]
+                  )
+                ]
+
+        Juggle x0 x1 x2 ->
+            Json.Encode.object
+                [ ( "Juggle"
+                  , Json.Encode.list (\v -> v)
+                        [ Json.Encode.int x0
+                        , Json.Encode.string x1
+                        , Json.Encode.string x2
+                        ]
+                  )
+                ]
+
+        Goodbye ->
+            Json.Encode.string "Goodbye"
+
 
 decodeRemoteMessage : Json.Decode.Decoder RemoteMessage
 decodeRemoteMessage =
