@@ -16,6 +16,16 @@ pub type Result<T> = std::result::Result<T, TypeGenError>;
 /// Marker trait for exported types.
 pub trait ElmExport {}
 
+// TODO: Handle snake_case -> camelCase conversion
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Identifier(String);
+
+pub struct ElmFile {
+    name: String,
+    structs: Vec<ElmStruct>,
+    enums: Vec<ElmEnum>,
+}
+
 // Float,
 // Char,
 // Bool,
@@ -28,6 +38,28 @@ pub enum ElmType {
     String,
     List(Box<ElmType>),
 }
+
+#[derive(Debug, Clone)]
+pub struct ElmStruct {
+    name: Identifier,
+    fields: Vec<(Identifier, ElmType)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ElmEnum {
+    name: Identifier,
+    variants: Vec<ElmEnumVariant>,
+}
+
+#[derive(Debug, Clone)]
+struct ElmEnumVariant {
+    name: Identifier,
+    fields: Vec<ElmType>,
+}
+
+const INT_IDENTIFIERS: [&str; 10] = [
+    "u8", "u16", "u32", "u64", "usize", "i8", "i16", "i32", "i64", "isize",
+];
 
 impl ElmType {
     #[must_use]
@@ -58,7 +90,7 @@ impl ElmType {
     }
 
     fn from_identifier(identifier: Identifier) -> Self {
-        if identifier.0 == "u32" {
+        if INT_IDENTIFIERS.iter().any(|s| *s == identifier.0) {
             ElmType::Int
         } else if identifier.0 == "String" {
             ElmType::String
@@ -66,16 +98,6 @@ impl ElmType {
             todo!("identifier not implemented yet.")
         }
     }
-}
-
-// TODO: Handle snake_case -> camelCase conversion
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Identifier(String);
-
-pub struct ElmFile {
-    name: String,
-    structs: Vec<ElmStruct>,
-    enums: Vec<ElmEnum>,
 }
 
 impl ElmFile {
@@ -101,12 +123,6 @@ impl ElmFile {
         }
         result
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct ElmStruct {
-    name: Identifier,
-    fields: Vec<(Identifier, ElmType)>,
 }
 
 impl ElmStruct {
@@ -213,18 +229,6 @@ impl ElmStruct {
         output.push_str("        ]\n");
         output
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct ElmEnum {
-    name: Identifier,
-    variants: Vec<ElmEnumVariant>,
-}
-
-#[derive(Debug, Clone)]
-struct ElmEnumVariant {
-    name: Identifier,
-    fields: Vec<ElmType>,
 }
 
 impl ElmEnum {
@@ -636,34 +640,36 @@ mod tests {
     /// Test for enum parsing
     #[test]
     fn test_message_file() {
-        let mut rust_file = File::open("src/tests/message.rs").expect("Failed to open file");
+        let rust_file = parse_rust_file_for_test("src/tests/message.rs");
+        let elm_file_content = read_file_for_test("src/tests/Message.elm");
+
+        let elm_file_object = ElmFile {
+            name: "Message".to_string(),
+            structs: rust_file.export_structs,
+            enums: rust_file.export_enums,
+        };
+
+        assert_eq!(elm_file_object.generate_file_content(), elm_file_content);
+    }
+
+    fn read_file_for_test(path: &str) -> String {
+        let mut rust_file = File::open(path).expect("Failed to open file");
         let mut rust_file_content = String::new();
         rust_file
             .read_to_string(&mut rust_file_content)
             .expect("Failed to read file");
+        rust_file_content
+    }
 
-        let ast = syn::parse_file(&rust_file_content).expect("Failed to parse file");
+    fn parse_rust_file_for_test(path: &str) -> RustFile {
+        let ast = syn::parse_file(&read_file_for_test(path)).expect("Failed to parse file");
+        RustFile::parse(&ast).expect("Failed to parse file")
+    }
 
-        let rust_file = RustFile::parse(&ast).expect("Failed to parse file");
-
-        assert_eq!(rust_file.export_enums.len(), 1);
-        assert_eq!(
-            rust_file.export_enums[0].type_def(),
-            indoc! {"
-            type RemoteMessage
-                = Hello String
-                | Compare Int Int
-                | Juggle Int String String
-                | Goodbye
-            "
-            }
-        );
-
-        let mut elm_file = File::open("src/tests/Message.elm").expect("Failed to open file");
-        let mut elm_file_content = String::new();
-        elm_file
-            .read_to_string(&mut elm_file_content)
-            .expect("Failed to read file");
+    #[test]
+    fn test_various_primitives() {
+        let rust_file = parse_rust_file_for_test("src/tests/primitives.rs");
+        let elm_file_content = read_file_for_test("src/tests/Primitives.elm");
 
         let elm_file_object = ElmFile {
             name: "Message".to_string(),
