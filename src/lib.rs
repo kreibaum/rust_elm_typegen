@@ -37,6 +37,7 @@ pub enum ElmType {
     Int,
     String,
     List(Box<ElmType>),
+    NamedType(Identifier), // No generics yet.
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +69,7 @@ impl ElmType {
             ElmType::Int => "Int".to_string(),
             ElmType::String => "String".to_string(),
             ElmType::List(t) => format!("List ({})", t.type_ref()),
+            ElmType::NamedType(name) => name.0.clone(),
         }
     }
 
@@ -77,6 +79,7 @@ impl ElmType {
             ElmType::Int => "Json.Decode.int".to_string(),
             ElmType::String => "Json.Decode.string".to_string(),
             ElmType::List(t) => format!("Json.Decode.list ({})", t.decoder_ref()),
+            ElmType::NamedType(name) => format!("decode{}", name.0),
         }
     }
 
@@ -86,6 +89,7 @@ impl ElmType {
             ElmType::Int => "Json.Encode.int".to_string(),
             ElmType::String => "Json.Encode.string".to_string(),
             ElmType::List(t) => format!("Json.Encode.list ({})", t.encoder_ref()),
+            ElmType::NamedType(name) => format!("encode{}", name.0),
         }
     }
 
@@ -95,7 +99,7 @@ impl ElmType {
         } else if identifier.0 == "String" {
             ElmType::String
         } else {
-            todo!("identifier not implemented yet.")
+            ElmType::NamedType(identifier)
         }
     }
 }
@@ -106,8 +110,9 @@ impl ElmFile {
         result.push_str(&format!("module {} exposing (..)\n\n\n", self.name));
         result.push_str("import Json.Decode\n");
         result.push_str("import Json.Encode\n");
-        result.push_str("import Json.Decode.Pipeline\n\n");
+        result.push_str("import Json.Decode.Pipeline\n");
         for struct_ in &self.structs {
+            result.push('\n');
             result.push_str(&struct_.type_def());
             result.push('\n');
             result.push_str(&struct_.encoder_def());
@@ -115,6 +120,7 @@ impl ElmFile {
             result.push_str(&struct_.decoder_def());
         }
         for enum_ in &self.enums {
+            result.push('\n');
             result.push_str(&enum_.type_def());
             result.push('\n');
             result.push_str(&enum_.encoder_def());
@@ -670,6 +676,20 @@ mod tests {
     fn test_various_primitives() {
         let rust_file = parse_rust_file_for_test("src/tests/primitives.rs");
         let elm_file_content = read_file_for_test("src/tests/Primitives.elm");
+
+        let elm_file_object = ElmFile {
+            name: "Message".to_string(),
+            structs: rust_file.export_structs,
+            enums: rust_file.export_enums,
+        };
+
+        assert_eq!(elm_file_object.generate_file_content(), elm_file_content);
+    }
+
+    #[test]
+    fn test_named_type_reference() {
+        let rust_file = parse_rust_file_for_test("src/tests/reference.rs");
+        let elm_file_content = read_file_for_test("src/tests/Reference.elm");
 
         let elm_file_object = ElmFile {
             name: "Message".to_string(),
