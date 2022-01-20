@@ -3,6 +3,10 @@ use std::collections::HashMap;
 use syn::spanned::Spanned;
 use thiserror::Error;
 
+mod identifier;
+use identifier::Identifier;
+use identifier::LetterCase::*;
+
 #[derive(Error, Debug)]
 pub enum TypeGenError {
     #[error("{0}")]
@@ -15,10 +19,6 @@ pub type Result<T> = std::result::Result<T, TypeGenError>;
 
 /// Marker trait for exported types.
 pub trait ElmExport {}
-
-// TODO: Handle snake_case -> camelCase conversion
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Identifier(String);
 
 pub struct ElmFile {
     name: String,
@@ -153,7 +153,11 @@ impl ElmStruct {
             } else {
                 output.push_str("    , ");
             }
-            output.push_str(&format!("{} : {}\n", field.0, ty.type_ref()));
+            output.push_str(&format!(
+                "{} : {}\n",
+                field.camel_case(LowerCase),
+                ty.type_ref()
+            ));
         }
         output.push_str("    }\n");
         output
@@ -227,7 +231,7 @@ impl ElmStruct {
                     field.0,
                     ty.encoder_ref(),
                     this,
-                    field.0
+                    field.camel_case(LowerCase)
                 )
                 .as_str(),
             );
@@ -670,7 +674,7 @@ mod tests {
             indoc! {"
             type alias Person =
                 { age : Int
-                , surname : String
+                , familyName : String
                 }
             "
             }

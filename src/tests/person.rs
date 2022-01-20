@@ -3,7 +3,7 @@ use super::ElmExport;
 #[allow(dead_code)]
 struct Person {
     age: u32,
-    surname: String,
+    family_name: String,
 }
 
 impl ElmExport for Person {}
