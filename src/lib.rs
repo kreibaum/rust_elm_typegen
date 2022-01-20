@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use syn::spanned::Spanned;
+use syn::TypePath;
 use thiserror::Error;
 
 mod identifier;
@@ -68,7 +69,7 @@ impl ElmType {
         match self {
             ElmType::Int => "Int".to_string(),
             ElmType::String => "String".to_string(),
-            ElmType::List(t) => format!("List ({})", t.type_ref()),
+            ElmType::List(t) => format!("(List {})", t.type_ref()),
             ElmType::NamedType(name) => name.0.clone(),
         }
     }
@@ -78,7 +79,7 @@ impl ElmType {
         match self {
             ElmType::Int => "Json.Decode.int".to_string(),
             ElmType::String => "Json.Decode.string".to_string(),
-            ElmType::List(t) => format!("Json.Decode.list ({})", t.decoder_ref()),
+            ElmType::List(t) => format!("(Json.Decode.list {})", t.decoder_ref()),
             ElmType::NamedType(name) => format!("decode{}", name.0),
         }
     }
@@ -88,20 +89,42 @@ impl ElmType {
         match self {
             ElmType::Int => "Json.Encode.int".to_string(),
             ElmType::String => "Json.Encode.string".to_string(),
-            ElmType::List(t) => format!("Json.Encode.list ({})", t.encoder_ref()),
+            ElmType::List(t) => format!("(Json.Encode.list {})", t.encoder_ref()),
             ElmType::NamedType(name) => format!("encode{}", name.0),
         }
     }
 
-    fn from_identifier(identifier: Identifier) -> Self {
+    fn from_identifier(type_path: &TypePath) -> Result<Self> {
+        let identifier = simple_path(&type_path.path)?;
         if INT_IDENTIFIERS.iter().any(|s| *s == identifier.0) {
-            ElmType::Int
+            Ok(ElmType::Int)
         } else if identifier.0 == "String" {
-            ElmType::String
+            Ok(ElmType::String)
+        } else if identifier.0 == "Vec" {
+            if let syn::PathArguments::AngleBracketed(arguments) =
+                &type_path.path.segments.last().unwrap().arguments
+            {
+                let generic = arguments.args.first().expect("List has no first argument");
+                let type_ref = match generic {
+                    syn::GenericArgument::Type(type_path) => elm_type_from_type(type_path)?,
+                    _ => panic!("List has non-type argument"),
+                };
+                Ok(ElmType::List(Box::new(type_ref)))
+            } else {
+                panic!("Vec has no angle brackets")
+            }
         } else {
-            ElmType::NamedType(identifier)
+            println!("{:?}", type_path);
+            Ok(ElmType::NamedType(identifier))
         }
     }
+}
+
+fn simple_path(path: &syn::Path) -> Result<Identifier> {
+    if path.segments.len() != 1 {
+        return Err(syn::Error::new(path.span(), "Only simple paths are supported").into());
+    }
+    Ok(Identifier(path.segments.first().unwrap().ident.to_string()))
 }
 
 impl ElmFile {
@@ -543,7 +566,7 @@ fn elm_type_from_type(ty: &syn::Type) -> Result<ElmType> {
         syn::Type::Macro(_) => todo!("Macro missing"),
         syn::Type::Never(_) => todo!("Never missing"),
         syn::Type::Paren(_) => todo!("Paren missing"),
-        syn::Type::Path(type_path) => ElmType::from_identifier(simple_path(&type_path.path)?),
+        syn::Type::Path(type_path) => ElmType::from_identifier(type_path)?,
         syn::Type::Ptr(_) => todo!("Ptr missing"),
         syn::Type::Reference(_) => todo!("Reference missing"),
         syn::Type::Slice(_) => todo!("Slice missing"),
@@ -553,13 +576,6 @@ fn elm_type_from_type(ty: &syn::Type) -> Result<ElmType> {
         syn::Type::__TestExhaustive(_) => todo!("__TestExhaustive missing"),
     };
     Ok(ty)
-}
-
-fn simple_path(path: &syn::Path) -> Result<Identifier> {
-    if path.segments.len() != 1 {
-        return Err(syn::Error::new(path.span(), "Only simple paths are supported").into());
-    }
-    Ok(Identifier(path.segments.first().unwrap().ident.to_string()))
 }
 
 fn last_path(path: &syn::Path) -> Result<Identifier> {
@@ -580,8 +596,11 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
 
+    // Keeping this code as a module makes my editor typecheck them & run tests.
     mod message;
     mod person;
+    mod primitives;
+    mod vectors;
 
     #[test]
     fn basic_export() {
@@ -747,6 +766,20 @@ mod tests {
 
         let elm_file_object = ElmFile {
             name: "Message".to_string(),
+            structs: rust_file.export_structs,
+            enums: rust_file.export_enums,
+        };
+
+        assert_eq!(elm_file_object.generate_file_content(), elm_file_content);
+    }
+
+    #[test]
+    fn test_vectors() {
+        let rust_file = parse_rust_file_for_test("src/tests/vectors.rs");
+        let elm_file_content = read_file_for_test("src/tests/Vectors.elm");
+
+        let elm_file_object = ElmFile {
+            name: "Vectors".to_string(),
             structs: rust_file.export_structs,
             enums: rust_file.export_enums,
         };
