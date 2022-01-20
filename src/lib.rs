@@ -204,17 +204,14 @@ impl ElmStruct {
             "decode{} : Json.Decode.Decoder {}\n",
             self.name.0, self.name.0
         );
-        output.push_str(format!("decode{} =\n", self.name.0).as_str());
-        output.push_str(format!("    Json.Decode.succeed {}\n", self.name.0).as_str());
+        output.push_str(&format!("decode{} =\n", self.name.0));
+        output.push_str(&format!("    Json.Decode.succeed {}\n", self.name.0));
         for (field, ty) in &self.fields {
-            output.push_str(
-                format!(
-                    "        |> Json.Decode.Pipeline.required \"{}\" {}\n",
-                    field.0,
-                    ty.decoder_ref()
-                )
-                .as_str(),
-            );
+            output.push_str(&format!(
+                "        |> Json.Decode.Pipeline.required \"{}\" {}\n",
+                field.0,
+                ty.decoder_ref()
+            ));
         }
         output
     }
@@ -238,7 +235,7 @@ impl ElmStruct {
             self.name.0, self.name.0
         );
         let this = self.name.0.to_lowercase();
-        output.push_str(format!("encode{} {} =\n", self.name.0, this).as_str());
+        output.push_str(&format!("encode{} {} =\n", self.name.0, this));
         output.push_str("    Json.Encode.object\n");
         let mut is_first = true;
         for (field, ty) in &self.fields {
@@ -248,16 +245,13 @@ impl ElmStruct {
             } else {
                 output.push_str("        , ");
             }
-            output.push_str(
-                format!(
-                    "( \"{}\", {} {}.{} )\n",
-                    field.0,
-                    ty.encoder_ref(),
-                    this,
-                    field.camel_case(LowerCase)
-                )
-                .as_str(),
-            );
+            output.push_str(&format!(
+                "( \"{}\", {} {}.{} )\n",
+                field.0,
+                ty.encoder_ref(),
+                this,
+                field.camel_case(LowerCase)
+            ));
         }
         output.push_str("        ]\n");
         output
@@ -609,18 +603,18 @@ mod tests {
         assert_eq!(ty.decoder_ref(), "Json.Decode.int");
         assert_eq!(ty.encoder_ref(), "Json.Encode.int");
         let ty = ElmType::List(Box::new(ElmType::Int));
-        assert_eq!(ty.type_ref(), "List (Int)");
-        assert_eq!(ty.decoder_ref(), "Json.Decode.list (Json.Decode.int)");
-        assert_eq!(ty.encoder_ref(), "Json.Encode.list (Json.Encode.int)");
+        assert_eq!(ty.type_ref(), "(List Int)");
+        assert_eq!(ty.decoder_ref(), "(Json.Decode.list Json.Decode.int)");
+        assert_eq!(ty.encoder_ref(), "(Json.Encode.list Json.Encode.int)");
         let ty = ElmType::List(Box::new(ElmType::List(Box::new(ElmType::Int))));
-        assert_eq!(ty.type_ref(), "List (List (Int))");
+        assert_eq!(ty.type_ref(), "(List (List Int))");
         assert_eq!(
             ty.decoder_ref(),
-            "Json.Decode.list (Json.Decode.list (Json.Decode.int))"
+            "(Json.Decode.list (Json.Decode.list Json.Decode.int))"
         );
         assert_eq!(
             ty.encoder_ref(),
-            "Json.Encode.list (Json.Encode.list (Json.Encode.int))"
+            "(Json.Encode.list (Json.Encode.list Json.Encode.int))"
         );
         let ty = ElmType::String;
         assert_eq!(ty.type_ref(), "String");
