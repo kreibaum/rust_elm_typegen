@@ -1,5 +1,7 @@
 # Rust Elm Typegen
 
+[![crates.io](https://img.shields.io/crates/v/rust_elm_typegen.svg)](https://crates.io/crates/rust_elm_typegen)
+
 Generate elm types from rust types. Right now this is barely usable and not announced.
 
     rust_elm_typegen -i src/pomp.rs -o generated/PompData.elm -m PompData
