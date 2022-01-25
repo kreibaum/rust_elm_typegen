@@ -1,10 +1,17 @@
 [package]
 name = "rust_elm_typegen"
-version = "0.1.0"
+version = "0.0.1"
+license = "MIT OR Apache-2.0"
 edition = "2021"
+description = "Generate Elm types from Rust types"
+keywords = ["elm"]
+homepage = "https://github.com/kreibaum/rust_elm_typegen"
+repository = "https://github.com/kreibaum/rust_elm_typegen"
+readme = "README.md"
+categories = ["development-tools::build-utils", "web-programming", ]
 
 [lib]
-crate-type = ["rlib"]
+crate-type = ["lib"]
 
 [[bin]]
 name = "rust_elm_typegen"
