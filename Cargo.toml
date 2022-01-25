@@ -17,6 +17,7 @@ path = "src/bin/typegen.rs"
 indoc = "1"
 syn = {version="1", default-features=false, features=["full", "parsing", "printing", "extra-traits"]}
 thiserror = "1"
+clap = { version = "3.0.12", features = ["derive"] }
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }

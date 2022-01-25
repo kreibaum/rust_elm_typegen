@@ -22,9 +22,9 @@ pub type Result<T> = std::result::Result<T, TypeGenError>;
 pub trait ElmExport {}
 
 pub struct ElmFile {
-    name: String,
-    structs: Vec<ElmStruct>,
-    enums: Vec<ElmEnum>,
+    pub name: String,
+    pub structs: Vec<ElmStruct>,
+    pub enums: Vec<ElmEnum>,
 }
 
 // Float,
@@ -121,7 +121,6 @@ impl ElmType {
         } else if identifier.0 == "Option" {
             Ok(ElmType::Maybe(Box::new(extract_one_inner_type(type_path)?)))
         } else {
-            println!("{:?}", type_path);
             Ok(ElmType::NamedType(identifier))
         }
     }
