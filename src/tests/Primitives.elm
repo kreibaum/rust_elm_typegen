@@ -16,6 +16,7 @@ type alias Primitives =
     , h : Int
     , i : Int
     , j : Int
+    , k : Bool
     }
 
 encodePrimitives : Primitives -> Json.Encode.Value
@@ -31,6 +32,7 @@ encodePrimitives primitives =
         , ( "h", Json.Encode.int primitives.h )
         , ( "i", Json.Encode.int primitives.i )
         , ( "j", Json.Encode.int primitives.j )
+        , ( "k", Json.Encode.bool primitives.k )
         ]
 
 decodePrimitives : Json.Decode.Decoder Primitives
@@ -46,3 +48,4 @@ decodePrimitives =
         |> Json.Decode.Pipeline.required "h" Json.Decode.int
         |> Json.Decode.Pipeline.required "i" Json.Decode.int
         |> Json.Decode.Pipeline.required "j" Json.Decode.int
+        |> Json.Decode.Pipeline.required "k" Json.Decode.bool

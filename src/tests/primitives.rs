@@ -12,6 +12,7 @@ struct Primitives {
     h: i32,
     i: i64,
     j: isize,
+    k: bool,
 }
 
 impl ElmExport for Primitives {}

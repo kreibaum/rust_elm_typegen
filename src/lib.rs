@@ -37,6 +37,7 @@ pub struct ElmFile {
 pub enum ElmType {
     Int,
     String,
+    Bool,
     List(Box<ElmType>),
     NamedType(Identifier), // No generics yet.
 }
@@ -69,6 +70,7 @@ impl ElmType {
         match self {
             ElmType::Int => "Int".to_string(),
             ElmType::String => "String".to_string(),
+            ElmType::Bool => "Bool".to_string(),
             ElmType::List(t) => format!("(List {})", t.type_ref()),
             ElmType::NamedType(name) => name.0.clone(),
         }
@@ -79,6 +81,7 @@ impl ElmType {
         match self {
             ElmType::Int => "Json.Decode.int".to_string(),
             ElmType::String => "Json.Decode.string".to_string(),
+            ElmType::Bool => "Json.Decode.bool".to_string(),
             ElmType::List(t) => format!("(Json.Decode.list {})", t.decoder_ref()),
             ElmType::NamedType(name) => format!("decode{}", name.0),
         }
@@ -89,6 +92,7 @@ impl ElmType {
         match self {
             ElmType::Int => "Json.Encode.int".to_string(),
             ElmType::String => "Json.Encode.string".to_string(),
+            ElmType::Bool => "Json.Encode.bool".to_string(),
             ElmType::List(t) => format!("(Json.Encode.list {})", t.encoder_ref()),
             ElmType::NamedType(name) => format!("encode{}", name.0),
         }
@@ -100,6 +104,8 @@ impl ElmType {
             Ok(ElmType::Int)
         } else if identifier.0 == "String" {
             Ok(ElmType::String)
+        } else if identifier.0 == "bool" {
+            Ok(ElmType::Bool)
         } else if identifier.0 == "Vec" {
             if let syn::PathArguments::AngleBracketed(arguments) =
                 &type_path.path.segments.last().unwrap().arguments
