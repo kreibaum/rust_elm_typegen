@@ -39,6 +39,8 @@ pub enum ElmType {
     String,
     Bool,
     List(Box<ElmType>),
+    /// Don't use Maybe(Maybe(x)), because you loose information when serializing.
+    Maybe(Box<ElmType>),
     NamedType(Identifier), // No generics yet.
 }
 
@@ -72,6 +74,7 @@ impl ElmType {
             ElmType::String => "String".to_string(),
             ElmType::Bool => "Bool".to_string(),
             ElmType::List(t) => format!("(List {})", t.type_ref()),
+            ElmType::Maybe(t) => format!("(Maybe {})", t.type_ref()),
             ElmType::NamedType(name) => name.0.clone(),
         }
     }
@@ -83,6 +86,7 @@ impl ElmType {
             ElmType::String => "Json.Decode.string".to_string(),
             ElmType::Bool => "Json.Decode.bool".to_string(),
             ElmType::List(t) => format!("(Json.Decode.list {})", t.decoder_ref()),
+            ElmType::Maybe(t) => format!("(Json.Decode.nullable {})", t.decoder_ref()),
             ElmType::NamedType(name) => format!("decode{}", name.0),
         }
     }
@@ -94,6 +98,12 @@ impl ElmType {
             ElmType::String => "Json.Encode.string".to_string(),
             ElmType::Bool => "Json.Encode.bool".to_string(),
             ElmType::List(t) => format!("(Json.Encode.list {})", t.encoder_ref()),
+            // Needs a method "Maybe a -> Value" and has access to a method "inner: a -> Value".
+            // (Maybe.map inner >> Maybe.withDefault Json.Encode.null)
+            ElmType::Maybe(t) => format!(
+                "(Maybe.map {} >> Maybe.withDefault Json.Encode.null)",
+                t.encoder_ref()
+            ),
             ElmType::NamedType(name) => format!("encode{}", name.0),
         }
     }
@@ -107,23 +117,30 @@ impl ElmType {
         } else if identifier.0 == "bool" {
             Ok(ElmType::Bool)
         } else if identifier.0 == "Vec" {
-            if let syn::PathArguments::AngleBracketed(arguments) =
-                &type_path.path.segments.last().unwrap().arguments
-            {
-                let generic = arguments.args.first().expect("List has no first argument");
-                let type_ref = match generic {
-                    syn::GenericArgument::Type(type_path) => elm_type_from_type(type_path)?,
-                    _ => panic!("List has non-type argument"),
-                };
-                Ok(ElmType::List(Box::new(type_ref)))
-            } else {
-                panic!("Vec has no angle brackets")
-            }
+            Ok(ElmType::List(Box::new(extract_one_inner_type(type_path)?)))
+        } else if identifier.0 == "Option" {
+            Ok(ElmType::Maybe(Box::new(extract_one_inner_type(type_path)?)))
         } else {
             println!("{:?}", type_path);
             Ok(ElmType::NamedType(identifier))
         }
     }
+}
+
+fn extract_one_inner_type(type_path: &TypePath) -> Result<ElmType> {
+    let inner_type = if let syn::PathArguments::AngleBracketed(arguments) =
+        &type_path.path.segments.last().unwrap().arguments
+    {
+        let generic = arguments.args.first().expect("Type has no first argument");
+        let type_ref = match generic {
+            syn::GenericArgument::Type(type_path) => elm_type_from_type(type_path)?,
+            _ => panic!("Type has non-type argument"),
+        };
+        type_ref
+    } else {
+        panic!("Vec has no angle brackets")
+    };
+    Ok(inner_type)
 }
 
 fn simple_path(path: &syn::Path) -> Result<Identifier> {
@@ -597,6 +614,7 @@ mod tests {
     use std::io::Read;
 
     // Keeping this code as a module makes my editor typecheck them & run tests.
+    mod maybe;
     mod message;
     mod person;
     mod primitives;
@@ -780,6 +798,20 @@ mod tests {
 
         let elm_file_object = ElmFile {
             name: "Vectors".to_string(),
+            structs: rust_file.export_structs,
+            enums: rust_file.export_enums,
+        };
+
+        assert_eq!(elm_file_object.generate_file_content(), elm_file_content);
+    }
+
+    #[test]
+    fn test_maybe() {
+        let rust_file = parse_rust_file_for_test("src/tests/maybe.rs");
+        let elm_file_content = read_file_for_test("src/tests/Maybe.elm");
+
+        let elm_file_object = ElmFile {
+            name: "Maybe".to_string(),
             structs: rust_file.export_structs,
             enums: rust_file.export_enums,
         };
